@@ -1,4 +1,5 @@
 <?php
+// Config file
 define('WP_REDIS_HOST', $_SERVER['REDIS_HOST']);
 define('DB_NAME', $_SERVER['RDS_DB_NAME']);
 define('DB_USER', $_SERVER['RDS_USERNAME']);
