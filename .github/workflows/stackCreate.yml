@@ -1,7 +1,5 @@
 name: Create a Pipeline
-on:
-  pull_request:
-    branches: [ ${{ github.head_ref }} ]
+on: [ pull_request ]
 jobs:
   build:
     runs-on: ubuntu-latest
