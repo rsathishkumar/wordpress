@@ -1,4 +1,4 @@
-name: Create a Pipeline
+name: Update a Cloudformation
 on:
   push:
     branches: [ main ]
