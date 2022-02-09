@@ -57,7 +57,7 @@ Resources:
                         Branch: !Ref GithubBranch
                         OAuthToken: !Ref GithubToken
                         Owner: !Ref GithubOwner
-                        PollForSourceChanges: "false"
+                        PollForSourceChanges: "true"
                         Repo: !Ref GithubRepo
                     OutputArtifacts: 
                       - 
