@@ -3,16 +3,22 @@ on:
   push:
     branches: [ main ]
 jobs:
-  deploy:
+  build:
+    name: Create Release
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v2
-      - name: Trigger AWS CodePipeline
-        uses: aws-actions/configure-aws-credentials@v1
+      - name: Checkout code
+        uses: actions/checkout@master
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@latest
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, you do not need to create your own token
         with:
-            aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-            aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-            aws-region: us-east-2
-            pipeline-name: databricks-test-pipeline
+          tag_name: ${{ github.ref }}
+          release_name: ${{ github.ref }}
+          body: |
+            See the CHANGELOG for more details on the release.
+          draft: false
+          prerelease: false
 
