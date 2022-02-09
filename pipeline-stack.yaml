@@ -1,9 +1,5 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Parameters:
-  CodePipelineName:
-    Description: Enter a name for Code Piepline.
-    Type: String
-    #Default: "demo-pipline"
   S3BucketName:
     Description: Enter a S3 bucket name to store artifacts.
     Type: String
@@ -35,7 +31,7 @@ Resources:
     CodePipelinePipeline:
         Type: "AWS::CodePipeline::Pipeline"
         Properties:
-            Name: !Ref CodePipelineName
+            Name: !Join ['', [!Ref "GithubBranch", "-Databricks-CodePipeline" ]]
             RoleArn: !GetAtt 
               - CodePipelineServiceRole
               - Arn 
@@ -129,7 +125,7 @@ Resources:
                 Action: 'sts:AssumeRole'
           Path: /
           Policies:
-            - PolicyName: AWS-CodePipeline-Service-3
+            - PolicyName: !Join ['', [!Ref "GithubBranch", "-Databricks-CodePipeline-Service-3" ]]
               PolicyDocument:
                 Version: 2012-10-17
                 Statement:
