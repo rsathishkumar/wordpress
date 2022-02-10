@@ -28,7 +28,6 @@ Metadata:
   Generator: "former2"
 Description: "An AWS Code Pipeline"
 Resources:
-  Resources:
   VPC:
     Type: AWS::EC2::VPC
     Properties:
