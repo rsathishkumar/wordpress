@@ -25,374 +25,180 @@ Parameters:
     Type: String
     #Default: "****"
 Metadata:
-  Generator: "former2"
+    Generator: "former2"
 Description: "An AWS Code Pipeline"
 Resources:
-  Resources:
-  VPC:
-    Type: AWS::EC2::VPC
-    Properties:
-      CidrBlock: 10.1.0.0/16
-      EnableDnsSupport: true
-      EnableDnsHostnames: true
-      Tags:
-      - Key: Name
-        Value:  !Join ['', [!Ref "AWS::StackName", "-VPC" ]]
-  # Our VPC will need internet access:     
-  InternetGateway:
-    Type: AWS::EC2::InternetGateway
-    DependsOn: VPC
-  AttachGateway:
-    Type: AWS::EC2::VPCGatewayAttachment
-    # Notice how you can't attach an IGW to a VPC unless both are created:
-    Properties:
-      VpcId: !Ref VPC
-      InternetGatewayId: !Ref InternetGateway
-  PublicSubnetA:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref VPC
-      CidrBlock: 10.1.10.0/24
-      AvailabilityZone: !Select [ 0, !GetAZs ]    # Get the first AZ in the list       
-      Tags:
-      - Key: Name
-        Value: !Sub ${AWS::StackName}-Public-A
-  PublicSubnetB:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref VPC
-      CidrBlock: 10.1.20.0/24
-      AvailabilityZone: !Select [ 1, !GetAZs ]    # Get the second AZ in the list 
-      Tags:
-      - Key: Name
-        Value: !Sub ${AWS::StackName}-Public-B
-  # Some route tables for our subnets:
-  PublicRouteTable:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref VPC
-      Tags:
-      - Key: Name
-        Value: !Sub ${AWS::StackName}-Public-Route-table
-  PublicRoute1:   # Public route table has direct routing to IGW:
-    Type: AWS::EC2::Route
-    DependsOn: AttachGateway
-    Properties:
-      RouteTableId: !Ref PublicRouteTable
-      DestinationCidrBlock: 0.0.0.0/0
-      GatewayId: !Ref InternetGateway      
-  PublicSubnetARouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PublicSubnetA
-      RouteTableId: !Ref PublicRouteTable
-  PublicSubnetBRouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PublicSubnetB
-      RouteTableId: !Ref PublicRouteTable
-  EC2SecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupName: !Sub ${AWS::StackName}-EC2SecurityGroup
-      GroupDescription: Create Security group for EC2
-      VpcId: !Ref VPC
-  DBSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupName: !Sub ${AWS::StackName}-DBSecurityGroup
-      GroupDescription: Create Security group for Database
-      VpcId: !Ref VPC
-      SecurityGroupIngress:
-      - IpProtocol: tcp
-        FromPort: 3306
-        ToPort: 3306
-        SourceSecurityGroupId: !Ref EC2SecurityGroup
-  EFSSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupName: !Sub ${AWS::StackName}-EFSSecurityGroup
-      GroupDescription: Create Security group for EFS
-      VpcId: !Ref VPC
-      SecurityGroupIngress:
-      - IpProtocol: tcp
-        FromPort: 2049
-        ToPort: 2049
-        SourceSecurityGroupId: !Ref EC2SecurityGroup
-  RedisSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupName: !Sub ${AWS::StackName}-RedisSecurityGroup
-      GroupDescription: Create Security group for Redis
-      VpcId: !Ref VPC
-      SecurityGroupIngress:
-      - IpProtocol: tcp
-        FromPort: 6379
-        ToPort: 6379
-        SourceSecurityGroupId: !Ref EC2SecurityGroup
-  DBSubnetGroup:
-    Type: AWS::RDS::DBSubnetGroup
-    Properties:
-      DBSubnetGroupDescription: "RDS Subnet Group for Databricks"
-      SubnetIds:
-      - !Ref PublicSubnetA
-      - !Ref PublicSubnetB
-  WordpressRDSCluster:
-    Type: 'AWS::RDS::DBCluster'
-    Properties:
-      DatabaseName: Databricks
-      MasterUsername: admin
-      MasterUserPassword: Databr!ck$&tg23
-      DBClusterIdentifier: !Sub ${AWS::StackName}-Databricks-Database
-      Engine: aurora
-      EngineVersion: 5.6.10a
-      EngineMode: serverless
-      VpcSecurityGroupIds: 
-      - !Ref DBSecurityGroup
-      DBSubnetGroupName: !Ref DBSubnetGroup
-      ScalingConfiguration:
-        AutoPause: true
-        MinCapacity: 2
-        MaxCapacity: 4
-        SecondsUntilAutoPause: 1000
-  WordpressApplication:
-    Type: AWS::ElasticBeanstalk::Application
-    Properties:
-      ApplicationName: DatabricksTestBeanstalkApp
-      Description: AWS Elastic Beanstalk Wordpress Application - Databricks testing
-  WordpressConfigurationTemplate:
-    Type: AWS::ElasticBeanstalk::ConfigurationTemplate
-    Properties:
-      ApplicationName:
-        Ref: WordpressApplication
-      Description: AWS Elastic Beanstalk Wordpress Application - Databricks testing
-      OptionSettings:
-      - Namespace: aws:autoscaling:asg
-        OptionName: MinSize
-        Value: '1'
-      - Namespace: aws:autoscaling:asg
-        OptionName: MaxSize
-        Value: '2'
-      - Namespace: aws:elasticbeanstalk:environment
-        OptionName: EnvironmentType
-        Value: LoadBalanced
-      - Namespace: aws:autoscaling:launchconfiguration
-        OptionName: IamInstanceProfile
-        Value: !Ref EBInstanceProfile        
-      SolutionStackName: 64bit Amazon Linux 2 v3.3.10 running PHP 7.4
-  WordpressEnvironment:
-    Type: AWS::ElasticBeanstalk::Environment
-    Properties:
-      ApplicationName: !Ref WordpressApplication
-      Description: Databricks test - Elastic Beanstalk Environment wordpress Application
-      SolutionStackName: 64bit Amazon Linux 2 v3.3.10 running PHP 7.4
-      TemplateName:
-        Ref: WordpressConfigurationTemplate
-  EBInstanceRole:
-    Type: AWS::IAM::Role
-    Properties: 
-      AssumeRolePolicyDocument:
-        Version: 2012-10-17
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service:
-                - ec2.amazonaws.com
-            Action:
-              - sts:AssumeRole
-      Description: Beanstalk EC2 role
-      ManagedPolicyArns: 
-        - arn:aws:iam::aws:policy/AWSElasticBeanstalkWebTier
-        - arn:aws:iam::aws:policy/AWSElasticBeanstalkMulticontainerDocker
-        - arn:aws:iam::aws:policy/AWSElasticBeanstalkWorkerTier
-  EBInstanceProfile:
-    Type: AWS::IAM::InstanceProfile
-    Properties: 
-      Roles:
-        - !Ref EBInstanceRole
-  CodePipelinePipeline:
-    Type: "AWS::CodePipeline::Pipeline"
-    Properties:
-      Name: !Join ["", [!Ref "GithubBranch", "-Databricks-CodePipeline"]]
-      RoleArn: !GetAtt
-        - CodePipelineServiceRole
-        - Arn
-      ArtifactStore:
-        Location: !Ref S3BucketName
-        Type: "S3"
-      Stages:
-        - Name: "Source"
-          Actions:
-            - Name: "Source"
-              ActionTypeId:
-                Category: "Source"
-                Owner: "ThirdParty"
-                Provider: "GitHub"
-                Version: "1"
-              Configuration:
-                Branch: !Ref GithubBranch
-                OAuthToken: !Ref GithubToken
-                Owner: !Ref GithubOwner
-                PollForSourceChanges: "true"
-                Repo: !Ref GithubRepo
-              OutputArtifacts:
-                - Name: "SourceArtifact"
-              Region: !Ref AWS::Region
-              Namespace: "SourceVariables"
-              RunOrder: 1
-        - Name: "Build"
-          Actions:
-            - Name: "Build"
-              ActionTypeId:
-                Category: "Build"
-                Owner: "AWS"
-                Provider: "CodeBuild"
-                Version: "1"
-              Configuration:
-                ProjectName: !Ref Buildphase
-              InputArtifacts:
-                - Name: "SourceArtifact"
-              OutputArtifacts:
-                - Name: "BuildArtifact"
-              Region: !Ref AWS::Region
-              Namespace: "BuildVariables"
-              RunOrder: 1
-        - Name: "Deploy"
-          Actions:
-            - Name: "Deploy"
-              ActionTypeId:
-                Category: "Deploy"
-                Owner: "AWS"
-                Provider: "ElasticBeanstalk"
-                Version: "1"
-              InputArtifacts:
+    CodePipelinePipeline:
+        Type: "AWS::CodePipeline::Pipeline"
+        Properties:
+            Name: !Join ['', [!Ref "GithubBranch", "-Databricks-CodePipeline" ]]
+            RoleArn: !GetAtt 
+              - CodePipelineServiceRole
+              - Arn 
+            ArtifactStore: 
+                Location: !Ref S3BucketName
+                Type: "S3"
+            Stages: 
               - 
-                Name: SourceArtifact  
-              Configuration:
-                ApplicationName: !Ref WordpressApplication
-                EnvironmentName: !Ref WordpressEnvironment
-              RunOrder: 1
-  LogBucket:
-    Type: "AWS::S3::Bucket"
-    Properties: {}
-    Metadata:
-      "AWS::CloudFormation::Designer":
-        id: b4492d67-e60f-4977-9cf6-398afa0a2cdc
-  Buildphase:
-    Type: "AWS::CodeBuild::Project"
-    Properties:
-      Description: Run Task
-      ServiceRole: !GetAtt
-        - CodeBuildRole
-        - Arn
-      Artifacts:
-        Type: CODEPIPELINE
-      Environment:
-        Type: LINUX_CONTAINER
-        ComputeType: BUILD_GENERAL1_SMALL
-        Image: "aws/codebuild/amazonlinux2-x86_64-standard:3.0"
-      Source:
-        Type: CODEPIPELINE
-      LogsConfig:
-        CloudWatchLogs:
-          Status: ENABLED
-        S3Logs:
-          Location: !Ref LogBucketName #!GetAtt
-          #  - LogBucket
-          #  - Arn
-          Status: ENABLED
-      TimeoutInMinutes: 120
-  CodePipelineServiceRole:
-    Type: "AWS::IAM::Role"
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: 2012-10-17
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service:
-                - codepipeline.amazonaws.com
-            Action: "sts:AssumeRole"
-      Path: /
-      Policies:
-        - PolicyName:
-            !Join [
-              "",
-              [!Ref "GithubBranch", "-Databricks-CodePipeline-Service-3"],
-            ]
-          PolicyDocument:
+                Name: "Source"
+                Actions: 
+                  - 
+                    Name: "Source"
+                    ActionTypeId: 
+                        Category: "Source"
+                        Owner: "ThirdParty"
+                        Provider: "GitHub"
+                        Version: "1"
+                    Configuration: 
+                        Branch: !Ref GithubBranch
+                        OAuthToken: !Ref GithubToken
+                        Owner: !Ref GithubOwner
+                        PollForSourceChanges: "true"
+                        Repo: !Ref GithubRepo
+                    OutputArtifacts: 
+                      - 
+                        Name: "SourceArtifact"
+                    Region: !Ref AWS::Region
+                    Namespace: "SourceVariables"
+                    RunOrder: 1
+              - 
+                Name: "Build"
+                Actions: 
+                  - 
+                    Name: "Build"
+                    ActionTypeId: 
+                        Category: "Build"
+                        Owner: "AWS"
+                        Provider: "CodeBuild"
+                        Version: "1"
+                    Configuration: 
+                        ProjectName: !Ref Buildphase
+                    InputArtifacts: 
+                      - 
+                        Name: "SourceArtifact"
+                    OutputArtifacts: 
+                      - 
+                        Name: "BuildArtifact"
+                    Region: !Ref AWS::Region
+                    Namespace: "BuildVariables"
+                    RunOrder: 1
+    LogBucket:
+        Type: 'AWS::S3::Bucket'
+        Properties: {}
+        Metadata:
+          'AWS::CloudFormation::Designer':
+            id: b4492d67-e60f-4977-9cf6-398afa0a2cdc
+    Buildphase:
+        Type: 'AWS::CodeBuild::Project'
+        Properties:
+          Description: Run Task
+          ServiceRole: !GetAtt 
+            - CodeBuildRole
+            - Arn
+          Artifacts:
+            Type: CODEPIPELINE
+          Environment:
+            Type: LINUX_CONTAINER
+            ComputeType: BUILD_GENERAL1_SMALL
+            Image: 'aws/codebuild/amazonlinux2-x86_64-standard:3.0'
+          Source:
+            Type: CODEPIPELINE
+          LogsConfig:
+            CloudWatchLogs:
+              Status: ENABLED
+            S3Logs:
+              Location: !Ref LogBucketName #!GetAtt 
+              #  - LogBucket
+              #  - Arn
+              Status: ENABLED
+          TimeoutInMinutes: 120                
+    CodePipelineServiceRole:
+        Type: 'AWS::IAM::Role'
+        Properties:
+          AssumeRolePolicyDocument:
             Version: 2012-10-17
             Statement:
               - Effect: Allow
-                Action:
-                  - "codecommit:CancelUploadArchive"
-                  - "codecommit:GetBranch"
-                  - "codecommit:GetCommit"
-                  - "codecommit:GetUploadArchiveStatus"
-                  - "codecommit:UploadArchive"
-                Resource: "*"
-              - Effect: Allow
-                Action:
-                  - "codedeploy:CreateDeployment"
-                  - "codedeploy:GetApplicationRevision"
-                  - "codedeploy:GetDeployment"
-                  - "codedeploy:GetDeploymentConfig"
-                  - "codedeploy:RegisterApplicationRevision"
-                Resource: "*"
-              - Effect: Allow
-                Action:
-                  - "codebuild:BatchGetBuilds"
-                  - "codebuild:StartBuild"
-                Resource: "*"
-              - Effect: Allow
-                Action:
-                  - "devicefarm:ListProjects"
-                  - "devicefarm:ListDevicePools"
-                  - "devicefarm:GetRun"
-                  - "devicefarm:GetUpload"
-                  - "devicefarm:CreateUpload"
-                  - "devicefarm:ScheduleRun"
-                Resource: "*"
-              - Effect: Allow
-                Action:
-                  - "lambda:InvokeFunction"
-                  - "lambda:ListFunctions"
-                Resource: "*"
-              - Effect: Allow
-                Action:
-                  - "iam:PassRole"
-                Resource: "*"
-              - Effect: Allow
-                Action:
-                  - "elasticbeanstalk:*"
-                  - "ec2:*"
-                  - "elasticloadbalancing:*"
-                  - "autoscaling:*"
-                  - "cloudwatch:*"
-                  - "s3:*"
-                  - "sns:*"
-                  - "cloudformation:*"
-                  - "rds:*"
-                  - "sqs:*"
-                  - "ecs:*"
-                Resource: "*"
-  CodeBuildRole:
-    Type: "AWS::IAM::Role"
-    Properties:
-      AssumeRolePolicyDocument:
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service:
-                - codebuild.amazonaws.com
-            Action:
-              - "sts:AssumeRole"
-      Path: /
-      Policies:
-        - PolicyName: root
-          PolicyDocument:
-            Version: 2012-10-17
+                Principal:
+                  Service:
+                    - codepipeline.amazonaws.com
+                Action: 'sts:AssumeRole'
+          Path: /
+          Policies:
+            - PolicyName: !Join ['', [!Ref "GithubBranch", "-Databricks-CodePipeline-Service-3" ]]
+              PolicyDocument:
+                Version: 2012-10-17
+                Statement:
+                  - Effect: Allow
+                    Action:
+                      - 'codecommit:CancelUploadArchive'
+                      - 'codecommit:GetBranch'
+                      - 'codecommit:GetCommit'
+                      - 'codecommit:GetUploadArchiveStatus'
+                      - 'codecommit:UploadArchive'
+                    Resource: '*'
+                  - Effect: Allow
+                    Action:
+                      - 'codedeploy:CreateDeployment'
+                      - 'codedeploy:GetApplicationRevision'
+                      - 'codedeploy:GetDeployment'
+                      - 'codedeploy:GetDeploymentConfig'
+                      - 'codedeploy:RegisterApplicationRevision'
+                    Resource: '*'
+                  - Effect: Allow
+                    Action:
+                      - 'codebuild:BatchGetBuilds'
+                      - 'codebuild:StartBuild'
+                    Resource: '*'
+                  - Effect: Allow
+                    Action:
+                      - 'devicefarm:ListProjects'
+                      - 'devicefarm:ListDevicePools'
+                      - 'devicefarm:GetRun'
+                      - 'devicefarm:GetUpload'
+                      - 'devicefarm:CreateUpload'
+                      - 'devicefarm:ScheduleRun'
+                    Resource: '*'
+                  - Effect: Allow
+                    Action:
+                      - 'lambda:InvokeFunction'
+                      - 'lambda:ListFunctions'
+                    Resource: '*'
+                  - Effect: Allow
+                    Action:
+                      - 'iam:PassRole'
+                    Resource: '*'
+                  - Effect: Allow
+                    Action:
+                      - 'elasticbeanstalk:*'
+                      - 'ec2:*'
+                      - 'elasticloadbalancing:*'
+                      - 'autoscaling:*'
+                      - 'cloudwatch:*'
+                      - 's3:*'
+                      - 'sns:*'
+                      - 'cloudformation:*'
+                      - 'rds:*'
+                      - 'sqs:*'
+                      - 'ecs:*'
+                    Resource: '*'
+    CodeBuildRole:
+        Type: 'AWS::IAM::Role'
+        Properties:
+          AssumeRolePolicyDocument:
             Statement:
               - Effect: Allow
-                Action: "*"
-                Resource: "*"
+                Principal:
+                  Service:
+                    - codebuild.amazonaws.com
+                Action:
+                  - 'sts:AssumeRole'
+          Path: /
+          Policies:
+            - PolicyName: root
+              PolicyDocument:
+                Version: 2012-10-17
+                Statement:
+                  - Effect: Allow
+                    Action: '*'
+                    Resource: '*'
