@@ -19,7 +19,7 @@ jobs:
       - name: Deploy to AWS CloudFormation
         uses: aws-actions/aws-cloudformation-github-deploy@v1
         with:
-          name: pipeline-stack
+          name: '${{ github.head_ref }}-Databricks-stack'
           template: pipeline-stack.yaml
           parameter-overrides: "S3BucketName=databricks-test-lb-log,LogBucketName=databricks-test-lb-log,GithubOwner=rsathishkumar,GithubRepo=wordpress,GithubBranch=${{ github.head_ref }},GithubToken=${{ secrets.REPO_ACCESS_TOKEN }}"
           no-fail-on-empty-changeset: 1
