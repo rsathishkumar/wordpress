@@ -22,3 +22,4 @@ jobs:
           name: pipeline-stack
           template: pipeline-stack.yaml
           parameter-overrides: "S3BucketName=databricks-test-lb-log,LogBucketName=databricks-test-lb-log,GithubOwner=rsathishkumar,GithubRepo=wordpress,GithubBranch=${{ github.head_ref }},GithubToken=${{ secrets.REPO_ACCESS_TOKEN }}"
+          no-fail-on-empty-changeset: 1
