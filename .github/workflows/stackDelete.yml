@@ -15,6 +15,13 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-2 
+    - name: Set Branch name
+      run: |
+        BRANCH=$(cat ${{ github.event_path }} | jq --raw-output '.ref')
+        echo "${{ github.repository }} has ${BRANCH} branch"
+        echo "::set-env name=STAGE::$(echo ${BRANCH})"
+    - name: Echo Branch name
+      run: echo Deleting from STAGE:$STAGE
     - name: Extract branch name
       shell: bash
       run: echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"
