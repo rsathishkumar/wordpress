@@ -19,7 +19,6 @@ jobs:
       run: |
         raw=$(git branch -r --contains ${{ github.ref }})
         branch=${raw/origin\/}
-        echo ::set-env name=BRANCH::$branch    
     - name: Delete Cloudformation stack
       uses: docker://amazon/aws-cli:2.0.7
       env:
