@@ -309,7 +309,7 @@ Resources:
   WordpressApplication:
     Type: AWS::ElasticBeanstalk::Application
     Properties:
-      ApplicationName: DatabricksTestBeanstalkApp
+      ApplicationName: !Sub ${AWS::StackName}-DatabricksTestBeanstalkApp
       Description: AWS Elastic Beanstalk Wordpress Application - Databricks testing
   WordpressConfigurationTemplate:
     Type: AWS::ElasticBeanstalk::ConfigurationTemplate
