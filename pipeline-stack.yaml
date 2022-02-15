@@ -129,6 +129,26 @@ Resources:
         FromPort: 6379
         ToPort: 6379
         SourceSecurityGroupId: !Ref EC2SecurityGroup
+  RedisSubnetGroup:
+    Type: 'AWS::ElastiCache::SubnetGroup'
+    Properties:
+      Description: !Sub ${AWS::StackName}-Cache Subnet Group
+      SubnetIds:
+        - !Ref PublicSubnetA
+        - !Ref PublicSubnetB    
+  WordpressRedis:
+    Type: 'AWS::ElastiCache::CacheCluster'
+    Properties:    
+      Engine: redis
+      CacheNodeType: cache.t2.micro
+      NumCacheNodes: '1'
+      CacheSubnetGroupName: !Ref RedisSubnetGroup
+      VpcSecurityGroupIds: 
+      - !Ref RedisSecurityGroup      
+  DBSnapshotCustomResource:
+    Type: Custom::DBSnapshotCustomResource
+    Properties:
+      ServiceToken: !GetAtt AWSLambdaFunction.Arn      
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
@@ -137,12 +157,10 @@ Resources:
       - !Ref PublicSubnetA
       - !Ref PublicSubnetB
   WordpressRDSCluster:
-    Type: 'AWS::RDS::DBCluster'
+    Type: AWS::RDS::DBCluster
     Properties:
-      DatabaseName: Databricks
-      MasterUsername: admin
-      MasterUserPassword: Databr!ck$&tg23
       DBClusterIdentifier: !Sub ${AWS::StackName}-Databricks-Database
+      SnapshotIdentifier: !GetAtt DBSnapshotCustomResource.Arn
       Engine: aurora
       EngineVersion: 5.6.10a
       EngineMode: serverless
@@ -154,6 +172,140 @@ Resources:
         MinCapacity: 2
         MaxCapacity: 4
         SecondsUntilAutoPause: 1000
+  AWSLambdaFunction:
+     Type: AWS::Lambda::Function
+     Properties:
+       Description: "Import Database"
+       FunctionName: !Sub '${AWS::StackName}-${AWS::Region}-lambda'
+       Handler: index.handler
+       Role: !GetAtt AWSLambdaExecutionRole.Arn
+       Timeout: 360
+       Runtime: python3.8
+       Code:
+         ZipFile: |
+          import boto3
+          import cfnresponse
+          def handler(event, context):
+              rds_client = boto3.client('rds')
+              lists = rds_client.describe_db_cluster_snapshots(DBClusterIdentifier='databricks-database-testing')
+              response_data = {}
+              response_data = {'Arn':lists['DBClusterSnapshots'][0]['DBClusterSnapshotArn']};
+              cfnresponse.send(event, context, cfnresponse.SUCCESS, response_data)
+  AWSLambdaExecutionRole:
+     Type: AWS::IAM::Role
+     Properties:
+       AssumeRolePolicyDocument:
+         Statement:
+         - Action:
+           - sts:AssumeRole
+           Effect: Allow
+           Principal:
+             Service:
+             - lambda.amazonaws.com
+         Version: '2012-10-17'
+       Path: "/"
+       Policies:
+       - PolicyDocument:
+           Statement:
+           - Action:
+             - logs:CreateLogGroup
+             - logs:CreateLogStream
+             - logs:PutLogEvents
+             Effect: Allow
+             Resource: arn:aws:logs:*:*:*
+           Version: '2012-10-17'
+         PolicyName: !Sub ${AWS::StackName}-${AWS::Region}-AWSLambda-CW
+       - PolicyDocument:
+           Statement:
+           - Action:
+             - rds:DescribeDBClusterSnapshots
+             Effect: Allow
+             Resource: arn:aws:rds:*:*:*
+           Version: '2012-10-17'
+         PolicyName: !Sub ${AWS::StackName}-${AWS::Region}-AWSLambda-S3
+       RoleName: !Sub ${AWS::StackName}-${AWS::Region}-AWSLambdaExecutionRole
+  WordpressFileSystemResource:
+    Type: AWS::EFS::FileSystem
+    Properties:
+      BackupPolicy:
+        Status: ENABLED
+      Encrypted: true
+      LifecyclePolicies:
+        - TransitionToIA: AFTER_30_DAYS
+      FileSystemTags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-Wordpress-EFS'
+  MountTargetResource1:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref WordpressFileSystemResource
+      SubnetId: !Ref PublicSubnetA
+      SecurityGroups:
+      - !Ref EFSSecurityGroup            
+  MountTargetResource2:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref WordpressFileSystemResource
+      SubnetId: !Ref PublicSubnetB
+      SecurityGroups:
+      - !Ref EFSSecurityGroup    
+  SourceLocationEFS:
+    Type: AWS::DataSync::LocationEFS
+    Properties: 
+      Ec2Config: 
+        SubnetArn: !Join
+          - ''
+          - - 'arn:aws:ec2:'
+            - 'us-east-2'
+            - ':'
+            - '045324237943'
+            - ':subnet/subnet-0b3ec234a6cb95709'
+        SecurityGroupArns: 
+          -  
+            !Join
+            - ''
+            - - 'arn:aws:ec2:'
+              - 'us-east-2'
+              - ':'
+              - '045324237943'
+              - ':security-group/sg-018d0382bf5eb3011'
+      EfsFilesystemArn: arn:aws:elasticfilesystem:us-east-2:045324237943:file-system/fs-0d9954c72b34e047b
+  DestLocationEFS:
+    Type: AWS::DataSync::LocationEFS
+    DependsOn: MountTargetResource1
+    Properties: 
+      Ec2Config: 
+        SecurityGroupArns: 
+          -  
+            !Join
+            - ''
+            - - 'arn:aws:ec2:'
+              - 'us-east-2'
+              - ':'
+              - '045324237943'
+              - ':security-group/'
+              - !Ref EFSSecurityGroup
+        SubnetArn: !Join
+          - ''
+          - - 'arn:aws:ec2:'
+            - 'us-east-2'
+            - ':'
+            - '045324237943'
+            - ':subnet/'
+            - !Ref PublicSubnetA
+      EfsFilesystemArn: !Join
+          - ''
+          - - 'arn:aws:elasticfilesystem:'
+            - 'us-east-2'
+            - ':'
+            - '045324237943'
+            - ':file-system/'
+            - !Ref WordpressFileSystemResource
+  Task:
+      Type: AWS::DataSync::Task
+      Properties:
+        SourceLocationArn: !Ref SourceLocationEFS
+        DestinationLocationArn: !Ref DestLocationEFS                     
   WordpressApplication:
     Type: AWS::ElasticBeanstalk::Application
     Properties:
@@ -166,6 +318,51 @@ Resources:
         Ref: WordpressApplication
       Description: AWS Elastic Beanstalk Wordpress Application - Databricks testing
       OptionSettings:
+      - Namespace: aws:elasticbeanstalk:application:environment
+        OptionName: AUTH_KEY
+        Value: test
+      - Namespace: aws:elasticbeanstalk:application:environment
+        OptionName: AUTH_SALT
+        Value: test
+      - Namespace: aws:elasticbeanstalk:application:environment
+        OptionName: EFS_MOUNT
+        Value: !Ref WordpressFileSystemResource
+      - Namespace: aws:elasticbeanstalk:application:environment
+        OptionName: LOGGED_IN_KEY
+        Value: test
+      - Namespace: aws:elasticbeanstalk:application:environment
+        OptionName: LOGGED_IN_SALT
+        Value: test
+      - Namespace: aws:elasticbeanstalk:application:environment
+        OptionName: NONCE_KEY
+        Value: test
+      - Namespace: aws:elasticbeanstalk:application:environment
+        OptionName: NONCE_SALT
+        Value: test
+      - Namespace: aws:elasticbeanstalk:application:environment
+        OptionName: RDS_DB_NAME
+        Value: databricks
+      - Namespace: aws:elasticbeanstalk:application:environment
+        OptionName: RDS_HOSTNAME
+        Value: !GetAtt WordpressRDSCluster.Endpoint.Address
+      - Namespace: aws:elasticbeanstalk:application:environment
+        OptionName: RDS_PASSWORD
+        Value: Databr!ck$&tg23
+      - Namespace: aws:elasticbeanstalk:application:environment
+        OptionName: RDS_PORT
+        Value: 3306
+      - Namespace: aws:elasticbeanstalk:application:environment
+        OptionName: RDS_USERNAME
+        Value: admin
+      - Namespace: aws:elasticbeanstalk:application:environment
+        OptionName: REDIS_HOST
+        Value: !GetAtt WordpressRedis.RedisEndpoint.Address
+      - Namespace: aws:elasticbeanstalk:application:environment
+        OptionName: SECURE_AUTH_KEY
+        Value: test
+      - Namespace: aws:elasticbeanstalk:application:environment
+        OptionName: SECURE_AUTH_SALT
+        Value: test
       - Namespace: aws:autoscaling:asg
         OptionName: MinSize
         Value: '1'
@@ -177,7 +374,46 @@ Resources:
         Value: LoadBalanced
       - Namespace: aws:autoscaling:launchconfiguration
         OptionName: IamInstanceProfile
-        Value: !Ref EBInstanceProfile        
+        Value: !Ref EBInstanceProfile    
+      - Namespace: aws:autoscaling:launchconfiguration
+        OptionName: SecurityGroups
+        Value: !Ref EC2SecurityGroup    
+      - Namespace: aws:elasticbeanstalk:environment
+        OptionName: LoadBalancerType
+        Value: application
+      - Namespace: aws:ec2:vpc
+        OptionName: VPCId
+        Value: !Ref VPC
+      - Namespace: aws:autoscaling:launchconfiguration
+        OptionName: InstanceType
+        Value: t2.micro
+      - Namespace: aws:autoscaling:trigger
+        OptionName: MeasureName
+        Value: CPUUtilization
+      - Namespace: aws:autoscaling:trigger
+        OptionName: Unit
+        Value: Percent
+      - Namespace: aws:autoscaling:trigger
+        OptionName: UpperThreshold
+        Value: '80'
+      - Namespace: aws:autoscaling:trigger
+        OptionName: LowerThreshold
+        Value: '20'
+      - Namespace: aws:ec2:vpc
+        OptionName: AssociatePublicIpAddress
+        Value: 'true'
+      - Namespace: aws:ec2:vpc
+        OptionName: ELBSubnets
+        Value: !Join
+          - ','
+          - - !Ref PublicSubnetA
+            - !Ref PublicSubnetB
+      - Namespace: aws:ec2:vpc
+        OptionName: Subnets
+        Value: !Join
+          - ','
+          - - !Ref PublicSubnetA
+            - !Ref PublicSubnetB
       SolutionStackName: 64bit Amazon Linux 2 v3.3.10 running PHP 7.4
   WordpressEnvironment:
     Type: AWS::ElasticBeanstalk::Environment
