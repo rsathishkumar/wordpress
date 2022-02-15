@@ -15,13 +15,6 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-2 
-    - name: Set Branch name
-      run: |
-        BRANCH=$(cat ${{ github.event_path }} | jq --raw-output '.ref')
-        echo "${{ github.repository }} has ${BRANCH} branch"
-        echo "STAGE=$(echo ${BRANCH}) >> $GITHUB_ENV"
-    - name: Echo Branch name
-      run: echo Deleting from STAGE:${{github.event.pull_request.head.ref}}
     - name: Extract branch name
       shell: bash
       run: echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"
@@ -32,4 +25,4 @@ jobs:
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       with:
-        args: cloudformation delete-stack --stack-name ${{ steps.extract_branch.outputs.branch }}-Databricks-stack
+        args: cloudformation delete-stack --stack-name ${{github.event.pull_request.head.ref}}-Databricks-stack
