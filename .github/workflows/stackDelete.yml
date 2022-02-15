@@ -21,7 +21,7 @@ jobs:
         echo "${{ github.repository }} has ${BRANCH} branch"
         echo "STAGE=$(echo ${BRANCH}) >> $GITHUB_ENV"
     - name: Echo Branch name
-      run: echo Deleting from STAGE:${{github.event.ref}}
+      run: echo Deleting from STAGE:${{github.event}}
     - name: Extract branch name
       shell: bash
       run: echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"
