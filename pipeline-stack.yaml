@@ -140,6 +140,14 @@ Resources:
         FromPort: 2049
         ToPort: 2049
         SourceSecurityGroupId: !Ref EC2SecurityGroup
+  EFSInboundRule:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: sg-0cdfed5edadcdf000
+      IpProtocol: tcp
+      FromPort: 2049
+      ToPort: 2049
+      CidrIp: 10.1.0.0/16
   RedisSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
