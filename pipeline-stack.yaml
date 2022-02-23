@@ -316,6 +316,9 @@ Resources:
         OptionName: IamInstanceProfile
         Value: !Ref EBInstanceProfile    
       - Namespace: aws:autoscaling:launchconfiguration
+        OptionName: SSHSourceRestriction
+        Value: 'tcp, 22, 22, 18.191.110.0/24'
+      - Namespace: aws:autoscaling:launchconfiguration
         OptionName: SecurityGroups
         Value: !Ref EC2SecurityGroup    
       - Namespace: aws:elasticbeanstalk:environment
