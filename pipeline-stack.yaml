@@ -47,11 +47,16 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       InternetGatewayId: !Ref InternetGateway
+  VPCPeeringConnection:
+    Type: AWS::EC2::VPCPeeringConnection
+    Properties: 
+      PeerVpcId: vpc-043836ec673bec77d
+      VpcId: !Ref VPC
   PublicSubnetA:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      CidrBlock: 10.1.10.0/24
+      CidrBlock: 10.1.0.0/24
       AvailabilityZone: !Select [ 0, !GetAZs ]    # Get the first AZ in the list       
       Tags:
       - Key: Name
@@ -60,7 +65,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      CidrBlock: 10.1.20.0/24
+      CidrBlock: 10.1.1.0/24
       AvailabilityZone: !Select [ 1, !GetAZs ]    # Get the second AZ in the list 
       Tags:
       - Key: Name
@@ -80,6 +85,18 @@ Resources:
       RouteTableId: !Ref PublicRouteTable
       DestinationCidrBlock: 0.0.0.0/0
       GatewayId: !Ref InternetGateway      
+  PublicRouteVPCPeering:   # Public route table between new vpc to vpcpeering:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 172.10.0.0/16
+      VpcPeeringConnectionId: !Ref VPCPeeringConnection      
+  PublicRouteVPCPeering2:   # Public route table between bastion vpc to vpcpeering:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: rtb-0dea74c15369864a9
+      DestinationCidrBlock: 10.1.0.0/16
+      VpcPeeringConnectionId: !Ref VPCPeeringConnection      
   PublicSubnetARouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
@@ -96,6 +113,11 @@ Resources:
       GroupName: !Sub ${AWS::StackName}-EC2SecurityGroup
       GroupDescription: Create Security group for EC2
       VpcId: !Ref VPC
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        CidrIp: 18.191.110.96/24
+        FromPort: 22
+        ToPort: 22
   DBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -118,6 +140,14 @@ Resources:
         FromPort: 2049
         ToPort: 2049
         SourceSecurityGroupId: !Ref EC2SecurityGroup
+  EFSInboundRule:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: sg-0cdfed5edadcdf000
+      IpProtocol: tcp
+      FromPort: 2049
+      ToPort: 2049
+      CidrIp: 10.1.0.0/16
   RedisSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -223,89 +253,7 @@ Resources:
              Resource: arn:aws:rds:*:*:*
            Version: '2012-10-17'
          PolicyName: !Sub ${AWS::StackName}-${AWS::Region}-AWSLambda-S3
-       RoleName: !Sub ${AWS::StackName}-${AWS::Region}-AWSLambdaExecutionRole
-  WordpressFileSystemResource:
-    Type: AWS::EFS::FileSystem
-    Properties:
-      BackupPolicy:
-        Status: ENABLED
-      Encrypted: true
-      LifecyclePolicies:
-        - TransitionToIA: AFTER_30_DAYS
-      FileSystemTags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-Wordpress-EFS'
-  MountTargetResource1:
-    Type: AWS::EFS::MountTarget
-    Properties:
-      FileSystemId: !Ref WordpressFileSystemResource
-      SubnetId: !Ref PublicSubnetA
-      SecurityGroups:
-      - !Ref EFSSecurityGroup            
-  MountTargetResource2:
-    Type: AWS::EFS::MountTarget
-    Properties:
-      FileSystemId: !Ref WordpressFileSystemResource
-      SubnetId: !Ref PublicSubnetB
-      SecurityGroups:
-      - !Ref EFSSecurityGroup    
-  SourceLocationEFS:
-    Type: AWS::DataSync::LocationEFS
-    Properties: 
-      Ec2Config: 
-        SubnetArn: !Join
-          - ''
-          - - 'arn:aws:ec2:'
-            - 'us-east-2'
-            - ':'
-            - '045324237943'
-            - ':subnet/subnet-0b3ec234a6cb95709'
-        SecurityGroupArns: 
-          -  
-            !Join
-            - ''
-            - - 'arn:aws:ec2:'
-              - 'us-east-2'
-              - ':'
-              - '045324237943'
-              - ':security-group/sg-018d0382bf5eb3011'
-      EfsFilesystemArn: arn:aws:elasticfilesystem:us-east-2:045324237943:file-system/fs-0d9954c72b34e047b
-  DestLocationEFS:
-    Type: AWS::DataSync::LocationEFS
-    DependsOn: MountTargetResource1
-    Properties: 
-      Ec2Config: 
-        SecurityGroupArns: 
-          -  
-            !Join
-            - ''
-            - - 'arn:aws:ec2:'
-              - 'us-east-2'
-              - ':'
-              - '045324237943'
-              - ':security-group/'
-              - !Ref EFSSecurityGroup
-        SubnetArn: !Join
-          - ''
-          - - 'arn:aws:ec2:'
-            - 'us-east-2'
-            - ':'
-            - '045324237943'
-            - ':subnet/'
-            - !Ref PublicSubnetA
-      EfsFilesystemArn: !Join
-          - ''
-          - - 'arn:aws:elasticfilesystem:'
-            - 'us-east-2'
-            - ':'
-            - '045324237943'
-            - ':file-system/'
-            - !Ref WordpressFileSystemResource
-  Task:
-      Type: AWS::DataSync::Task
-      Properties:
-        SourceLocationArn: !Ref SourceLocationEFS
-        DestinationLocationArn: !Ref DestLocationEFS                     
+       RoleName: !Sub ${AWS::StackName}-${AWS::Region}-AWSLambdaExecutionRole                    
   WordpressApplication:
     Type: AWS::ElasticBeanstalk::Application
     Properties:
@@ -325,8 +273,11 @@ Resources:
         OptionName: AUTH_SALT
         Value: test
       - Namespace: aws:elasticbeanstalk:application:environment
+        OptionName: EFS_MOUNT_IP
+        Value: 172.10.0.57
+      - Namespace: aws:elasticbeanstalk:application:environment
         OptionName: EFS_MOUNT
-        Value: !Ref WordpressFileSystemResource
+        Value: fs-0a650681faf1f7bdc
       - Namespace: aws:elasticbeanstalk:application:environment
         OptionName: LOGGED_IN_KEY
         Value: test
