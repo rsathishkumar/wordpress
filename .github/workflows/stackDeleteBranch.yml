@@ -1,4 +1,4 @@
-name: Delete pipeline
+name: Delete pipeline on branch delete
 
 on: [delete]
 
