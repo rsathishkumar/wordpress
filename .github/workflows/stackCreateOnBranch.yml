@@ -21,6 +21,6 @@ jobs:
         with:
           name: '${{ github.ref_name }}-Databricks-stack'
           template: pipeline-stack.yaml
-          parameter-overrides: "S3BucketName=databricks-test-lb-log,LogBucketName=databricks-test-lb-log,GithubOwner=rsathishkumar,GithubRepo=wordpress,GithubBranch=${{ github.head_ref }},GithubToken=${{ secrets.REPO_ACCESS_TOKEN }}"
+          parameter-overrides: "S3BucketName=databricks-test-lb-log,LogBucketName=databricks-test-lb-log,GithubOwner=rsathishkumar,GithubRepo=wordpress,GithubBranch=${{ github.ref_name }},GithubToken=${{ secrets.REPO_ACCESS_TOKEN }}"
           no-fail-on-empty-changeset: 1
           capabilities: CAPABILITY_NAMED_IAM
