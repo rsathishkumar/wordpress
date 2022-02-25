@@ -1,6 +1,6 @@
 name: Delete pipeline on branch delete
 
-on: [delete]
+on: delete
 
 jobs:
   build:
